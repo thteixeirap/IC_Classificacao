@@ -12,7 +12,7 @@ from ucimlrepo import fetch_ucirepo
 
 # Configurações globais
 plt.style.use('seaborn')
-results_dir = 'results'
+results_dir = 'Regression/Electric Consumption/results_random_forest'
 os.makedirs(results_dir, exist_ok=True)
 
 def load_data():
@@ -81,7 +81,7 @@ def plot_feature_importance(model, feature_names):
     plt.savefig(os.path.join(results_dir, 'feature_importance.png'))
     plt.close()
 
-def train_model(X, y, n_repetitions=3):
+def train_model(X, y, n_repetitions=30):
     """
     Treina o Random Forest n_repetitions vezes e retorna as métricas
     """

@@ -12,7 +12,7 @@ from ucimlrepo import fetch_ucirepo
 
 # Configurações globais
 plt.style.use('seaborn')
-results_dir = 'results'
+results_dir = 'Regression/Electric Consumption/results_linear_regression'
 os.makedirs(results_dir, exist_ok=True)
 
 def load_data():
@@ -122,7 +122,7 @@ def analyze_residuals(y_test, y_pred, model_name="Linear Regression"):
     print(f"Skewness: {stats.skew(residuals):.4f}")
     print(f"Kurtosis: {stats.kurtosis(residuals):.4f}")
 
-def train_model(X, y, n_repetitions=10):
+def train_model(X, y, n_repetitions=30):
     """
     Treina o modelo n_repetitions vezes e retorna as métricas de cada execução
     """
