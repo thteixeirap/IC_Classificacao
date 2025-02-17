@@ -1,7 +1,11 @@
 Regression/dataset
 results
 Regression/Electric Consumption/__pycache__
-Regression/Car Price /results_car_price
 Regression/Electric Consumption/results_linear_regression
-Regression/Electric Consumption/results_random_forest
 Regression/Electric Consumption/results_xgboost
+Regression/Car Price/results_linear_regression
+Regression/Car Price/results_random_forest
+Regression/Car Price/results_xgboost
+Regression/Loan Approval/results_linear_regression
+Regression/Loan Approval/results_random_forest
+Regression/Loan Approval/results_xgboost
