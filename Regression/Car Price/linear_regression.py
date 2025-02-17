@@ -23,7 +23,7 @@ def carregar_dados():
     """
     Carrega e realiza análise exploratória dos dados
     """
-    df = pd.read_csv('car_price_dataset.csv')
+    df = pd.read_csv('Regression/Car Price/car_price_dataset.csv')
     
     print("\nInformações do Dataset:")
     print(df.info())

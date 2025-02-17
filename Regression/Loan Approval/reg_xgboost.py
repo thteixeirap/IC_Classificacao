@@ -22,7 +22,7 @@ def carregar_dados():
     """
     Carrega os dados do arquivo CSV
     """
-    df = pd.read_csv('loan_approval_dataset.csv')
+    df = pd.read_csv('Regression/Loan Approval/loan_approval_dataset.csv')
     
     print("Informações iniciais do dataset:")
     print("\nVariáveis disponíveis:")
