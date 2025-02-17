@@ -1,14 +1,13 @@
+import os
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
-import os
-from ucimlrepo import fetch_ucirepo
 
 # Configurações globais
 plt.style.use('seaborn')
@@ -17,30 +16,31 @@ os.makedirs(results_dir, exist_ok=True)
 
 def load_data():
     """
-    Carrega e prepara os dados iniciais
+    Carrega e prepara os dados iniciais do arquivo local
     """
-    # Fetch dataset
-    dataset = fetch_ucirepo(id=235)
-    X = dataset.data.features
+    # Definir o caminho do dataset
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(os.path.dirname(current_dir), 'dataset', 'household_power_consumption.txt')
+    
+    # Carregar dados
+    data = pd.read_csv(dataset_path, sep=';', 
+                      parse_dates={'DateTime' : ['Date', 'Time']},
+                      na_values=['?'], decimal='.')
     
     print("Informações iniciais do dataset:")
     print("\nVariáveis disponíveis:")
-    print(X.columns)
+    print(data.columns)
     print("\nPrimeiras linhas:")
-    print(X.head())
+    print(data.head())
     print("\nInformações gerais:")
-    print(X.info())
+    print(data.info())
     
-    return X
+    return data
 
 def preprocess_data(X):
     """
     Realiza o pré-processamento dos dados
     """
-    # Convertendo DateTime
-    X['DateTime'] = pd.to_datetime(X['Date'] + ' ' + X['Time'])
-    X = X.drop(['Date', 'Time'], axis=1)
-    
     # Verificando e tratando valores ausentes
     print("\nValores ausentes antes do tratamento:")
     print(X.isnull().sum())
@@ -51,10 +51,16 @@ def preprocess_data(X):
     y = X['Global_active_power']
     X_features = X.drop(['Global_active_power', 'DateTime'], axis=1)
     
-    # Convertendo para numérico
-    X_features = X_features.apply(pd.to_numeric, errors='coerce')
-    X_features = X_features.dropna()
-    y = y[X_features.index]
+    # Convertendo para numérico explicitamente
+    for col in X_features.columns:
+        X_features[col] = pd.to_numeric(X_features[col], errors='coerce')
+    
+    y = pd.to_numeric(y, errors='coerce')
+    
+    # Removendo linhas com valores NA após conversão
+    mask = ~(X_features.isna().any(axis=1) | y.isna())
+    X_features = X_features[mask]
+    y = y[mask]
     
     return X_features, y
 
@@ -62,6 +68,9 @@ def analyze_data(X, y):
     """
     Realiza análise exploratória dos dados
     """
+    # Convertendo para numérico, se necessário
+    y = pd.to_numeric(y, errors='coerce')
+    
     # Estatísticas descritivas
     print("\nEstatísticas descritivas das features:")
     print(X.describe())
@@ -76,44 +85,14 @@ def analyze_data(X, y):
     
     # Distribuição da variável target
     plt.figure(figsize=(10, 6))
-    sns.histplot(y, kde=True)
+    plt.hist(y, bins=50, density=True, alpha=0.7)
     plt.title('Distribuição da Global Active Power')
+    plt.xlabel('Global Active Power')
+    plt.ylabel('Densidade')
     plt.savefig(os.path.join(results_dir, 'target_distribution.png'))
     plt.close()
 
-def train_model(X, y):
-    """
-    Treina o modelo e retorna as métricas de avaliação
-    """
-    # Normalização
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    # Split treino/teste
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
-    
-    # Treinamento
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-    
-    # Predições
-    y_pred = model.predict(X_test)
-    
-    # Métricas
-    metrics = {
-        'mse': mean_squared_error(y_test, y_pred),
-        'rmse': np.sqrt(mean_squared_error(y_test, y_pred)),
-        'mae': mean_absolute_error(y_test, y_pred),
-        'r2': r2_score(y_test, y_pred)
-    }
-    
-    # Validação cruzada
-    cv_scores = cross_val_score(model, X_scaled, y, cv=10, scoring='neg_mean_squared_error')
-    cv_rmse = np.sqrt(-cv_scores)
-    
-    return model, metrics, (y_test, y_pred), cv_rmse
-
-def analyze_residuals(y_test, y_pred):
+def analyze_residuals(y_test, y_pred, model_name="Linear Regression"):
     """
     Realiza análise detalhada dos resíduos
     """
@@ -124,31 +103,118 @@ def analyze_residuals(y_test, y_pred):
     
     # 1. Distribuição dos resíduos
     sns.histplot(residuals, kde=True, ax=ax1)
-    ax1.set_title('Distribuição dos Resíduos')
+    ax1.set_title(f'Distribuição dos Resíduos - {model_name}')
     ax1.set_xlabel('Resíduo')
     ax1.set_ylabel('Contagem')
     
     # 2. Resíduos vs Valores Preditos
     sns.scatterplot(x=y_pred, y=residuals, ax=ax2)
     ax2.axhline(y=0, color='r', linestyle='--')
-    ax2.set_title('Resíduos vs Valores Preditos')
+    ax2.set_title(f'Resíduos vs Valores Preditos - {model_name}')
     ax2.set_xlabel('Valores Preditos')
     ax2.set_ylabel('Resíduos')
     
     # 3. Q-Q plot
     stats.probplot(residuals, dist="norm", plot=ax3)
-    ax3.set_title('Q-Q Plot dos Resíduos')
+    ax3.set_title(f'Q-Q Plot dos Resíduos - {model_name}')
     
     plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, 'residuals_analysis.png'))
+    plt.savefig(os.path.join(results_dir, f'{model_name.lower().replace(" ", "_")}_residuals.png'))
     plt.close()
     
     # Estatísticas dos resíduos
-    print("\nEstatísticas dos Resíduos:")
+    print(f"\nEstatísticas dos Resíduos - {model_name}:")
     print(f"Média: {np.mean(residuals):.4f}")
     print(f"Desvio Padrão: {np.std(residuals):.4f}")
     print(f"Skewness: {stats.skew(residuals):.4f}")
     print(f"Kurtosis: {stats.kurtosis(residuals):.4f}")
+
+def train_model(X, y, n_repetitions=30):
+    """
+    Treina o modelo n_repetitions vezes e retorna as métricas de cada execução
+    """
+    all_metrics = []
+    
+    for i in range(n_repetitions):
+        print(f"\nExecutando repetição {i+1}/{n_repetitions}")
+        
+        # Normalização
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Split treino/teste
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=0.2, random_state=i)
+        
+        # Treinamento
+        model = LinearRegression()
+        model.fit(X_train, y_train)
+        
+        # Predições
+        y_pred = model.predict(X_test)
+        
+        # Métricas
+        metrics = {
+            'mse': mean_squared_error(y_test, y_pred),
+            'rmse': np.sqrt(mean_squared_error(y_test, y_pred)),
+            'mae': mean_absolute_error(y_test, y_pred),
+            'r2': r2_score(y_test, y_pred)
+        }
+        
+        all_metrics.append(metrics)
+        
+        # Se for a última iteração, salvar as predições para análise
+        if i == n_repetitions - 1:
+            final_predictions = (y_test, y_pred)
+    
+    # Calcular médias e desvios das métricas
+    avg_metrics = {
+        'mse_mean': np.mean([m['mse'] for m in all_metrics]),
+        'mse_std': np.std([m['mse'] for m in all_metrics]),
+        'rmse_mean': np.mean([m['rmse'] for m in all_metrics]),
+        'rmse_std': np.std([m['rmse'] for m in all_metrics]),
+        'mae_mean': np.mean([m['mae'] for m in all_metrics]),
+        'mae_std': np.std([m['mae'] for m in all_metrics]),
+        'r2_mean': np.mean([m['r2'] for m in all_metrics]),
+        'r2_std': np.std([m['r2'] for m in all_metrics])
+    }
+    
+    # Plot da distribuição das métricas
+    plt.figure(figsize=(15, 5))
+    
+    # RMSE ao longo das repetições
+    plt.subplot(1, 2, 1)
+    rmse_values = [m['rmse'] for m in all_metrics]
+    plt.plot(range(1, n_repetitions + 1), rmse_values, 'b-')
+    plt.axhline(y=avg_metrics['rmse_mean'], color='r', linestyle='--', 
+                label=f'Média: {avg_metrics["rmse_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('RMSE')
+    plt.title('RMSE ao longo das repetições')
+    plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    r2_values = [m['r2'] for m in all_metrics]
+    plt.plot(range(1, n_repetitions + 1), r2_values, 'g-')
+    plt.axhline(y=avg_metrics['r2_mean'], color='r', linestyle='--', 
+                label=f'Média: {avg_metrics["r2_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('R²')
+    plt.title('R² ao longo das repetições')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, 'metrics_over_runs.png'))
+    plt.close()
+    
+    # Boxplot das métricas
+    plt.figure(figsize=(10, 6))
+    plt.boxplot([rmse_values, r2_values], labels=['RMSE', 'R²'])
+    plt.title('Distribuição das Métricas nas 30 Repetições')
+    plt.savefig(os.path.join(results_dir, 'metrics_boxplot.png'))
+    plt.close()
+    
+    return model, avg_metrics, final_predictions, all_metrics
 
 def plot_predictions(y_test, y_pred):
     """
@@ -165,33 +231,41 @@ def plot_predictions(y_test, y_pred):
     plt.close()
 
 def main():
+    """
+    Função principal que executa todo o pipeline de análise
+    """
     # Carregar dados
+    print("Carregando dados...")
     data = load_data()
     
     # Pré-processamento
+    print("\nRealizando pré-processamento...")
     X, y = preprocess_data(data)
     
     # Análise exploratória
+    print("\nRealizando análise exploratória...")
     analyze_data(X, y)
     
     # Treinamento e avaliação
-    model, metrics, predictions, cv_rmse = train_model(X, y)
+    print("\nIniciando treinamento do modelo...")
+    model, avg_metrics, predictions, all_metrics = train_model(X, y)
     
-    # Mostrar métricas
-    print("\nMétricas de Avaliação:")
-    print(f"MSE: {metrics['mse']:.4f}")
-    print(f"RMSE: {metrics['rmse']:.4f}")
-    print(f"MAE: {metrics['mae']:.4f}")
-    print(f"R²: {metrics['r2']:.4f}")
-    print(f"\nValidação Cruzada (10-fold):")
-    print(f"RMSE médio: {cv_rmse.mean():.4f}")
-    print(f"Desvio padrão RMSE: {cv_rmse.std():.4f}")
+    # Mostrar métricas médias
+    print("\nMétricas médias das 30 repetições:")
+    print(f"MSE médio: {avg_metrics['mse_mean']:.4f} (±{avg_metrics['mse_std']:.4f})")
+    print(f"RMSE médio: {avg_metrics['rmse_mean']:.4f} (±{avg_metrics['rmse_std']:.4f})")
+    print(f"MAE médio: {avg_metrics['mae_mean']:.4f} (±{avg_metrics['mae_std']:.4f})")
+    print(f"R² médio: {avg_metrics['r2_mean']:.4f} (±{avg_metrics['r2_std']:.4f})")
     
-    # Análise de resíduos
+    # Análise de resíduos da última execução
+    print("\nRealizando análise de resíduos...")
     analyze_residuals(predictions[0], predictions[1])
     
-    # Plot de predições
+    # Plot de predições da última execução
+    print("\nGerando gráficos de predições...")
     plot_predictions(predictions[0], predictions[1])
+    
+    print("\nAnálise completa! Os resultados foram salvos na pasta 'results'")
 
 if __name__ == "__main__":
     main()
