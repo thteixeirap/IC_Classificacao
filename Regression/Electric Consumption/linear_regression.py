@@ -8,6 +8,7 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+from ucimlrepo import fetch_ucirepo
 
 # Configurações globais
 plt.style.use('seaborn')
@@ -16,16 +17,10 @@ os.makedirs(results_dir, exist_ok=True)
 
 def load_data():
     """
-    Carrega e prepara os dados iniciais do arquivo local
+    Carrega os dados diretamente do repositório UCI
     """
-    # Definir o caminho do dataset
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    dataset_path = os.path.join(os.path.dirname(current_dir), 'dataset', 'household_power_consumption.txt')
-    
-    # Carregar dados
-    data = pd.read_csv(dataset_path, sep=';', 
-                      parse_dates={'DateTime' : ['Date', 'Time']},
-                      na_values=['?'], decimal='.')
+    dataset = fetch_ucirepo(id=235)
+    data = dataset.data.features
     
     print("Informações iniciais do dataset:")
     print("\nVariáveis disponíveis:")
@@ -41,6 +36,9 @@ def preprocess_data(X):
     """
     Realiza o pré-processamento dos dados
     """
+    # Criar coluna DateTime
+    X['DateTime'] = pd.to_datetime(X['Date'] + ' ' + X['Time'])
+    
     # Verificando e tratando valores ausentes
     print("\nValores ausentes antes do tratamento:")
     print(X.isnull().sum())
@@ -48,14 +46,12 @@ def preprocess_data(X):
     X = X.dropna()
     
     # Preparando features e target
-    y = X['Global_active_power']
-    X_features = X.drop(['Global_active_power', 'DateTime'], axis=1)
+    y = pd.to_numeric(X['Global_active_power'], errors='coerce')
+    X_features = X.drop(['Global_active_power', 'DateTime', 'Date', 'Time'], axis=1)
     
     # Convertendo para numérico explicitamente
     for col in X_features.columns:
         X_features[col] = pd.to_numeric(X_features[col], errors='coerce')
-    
-    y = pd.to_numeric(y, errors='coerce')
     
     # Removendo linhas com valores NA após conversão
     mask = ~(X_features.isna().any(axis=1) | y.isna())
@@ -68,9 +64,6 @@ def analyze_data(X, y):
     """
     Realiza análise exploratória dos dados
     """
-    # Convertendo para numérico, se necessário
-    y = pd.to_numeric(y, errors='coerce')
-    
     # Estatísticas descritivas
     print("\nEstatísticas descritivas das features:")
     print(X.describe())
@@ -129,7 +122,7 @@ def analyze_residuals(y_test, y_pred, model_name="Linear Regression"):
     print(f"Skewness: {stats.skew(residuals):.4f}")
     print(f"Kurtosis: {stats.kurtosis(residuals):.4f}")
 
-def train_model(X, y, n_repetitions=30):
+def train_model(X, y, n_repetitions=10):
     """
     Treina o modelo n_repetitions vezes e retorna as métricas de cada execução
     """
@@ -210,7 +203,7 @@ def train_model(X, y, n_repetitions=30):
     # Boxplot das métricas
     plt.figure(figsize=(10, 6))
     plt.boxplot([rmse_values, r2_values], labels=['RMSE', 'R²'])
-    plt.title('Distribuição das Métricas nas 30 Repetições')
+    plt.title('Distribuição das Métricas nas 10 Repetições')
     plt.savefig(os.path.join(results_dir, 'metrics_boxplot.png'))
     plt.close()
     
@@ -251,7 +244,7 @@ def main():
     model, avg_metrics, predictions, all_metrics = train_model(X, y)
     
     # Mostrar métricas médias
-    print("\nMétricas médias das 30 repetições:")
+    print("\nMétricas médias das 10 repetições:")
     print(f"MSE médio: {avg_metrics['mse_mean']:.4f} (±{avg_metrics['mse_std']:.4f})")
     print(f"RMSE médio: {avg_metrics['rmse_mean']:.4f} (±{avg_metrics['rmse_std']:.4f})")
     print(f"MAE médio: {avg_metrics['mae_mean']:.4f} (±{avg_metrics['mae_std']:.4f})")
