@@ -154,67 +154,89 @@ def plotar_importancia_features(modelo, X, n_top=20):
     
     return importancias
 
-def treinar_modelo(X, y):
+def treinar_modelo(X, y, n_repeticoes=30):
     """
-    Treina e avalia o modelo Random Forest
+    Treina e avalia o modelo Random Forest com múltiplas repetições
     """
-    # Split dos dados
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    todas_metricas = []  # Lista para armazenar as métricas de cada repetição
     
-    # Escalar features
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    for i in range(n_repeticoes):
+        print(f"\nRepetição {i + 1} de {n_repeticoes}")
+        
+        # Split dos dados
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=i)
+        
+        # Escalar features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Treinar modelo
+        modelo = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=None,
+            min_samples_split=2,
+            min_samples_leaf=1,
+            random_state=42
+        )
+        modelo.fit(X_train_scaled, y_train)
+        
+        # Fazer predições
+        y_pred_test = modelo.predict(X_test_scaled)
+        
+        # Calcular métricas
+        metricas = {
+            'r2': r2_score(y_test, y_pred_test),
+            'rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
+            'mae': mean_absolute_error(y_test, y_pred_test)
+        }
+        todas_metricas.append(metricas)
+        
+        print(f"R²: {metricas['r2']:.4f}, RMSE: {metricas['rmse']:.2f}, MAE: {metricas['mae']:.2f}")
     
-    # Treinar modelo
-    print("\nTreinando Random Forest...")
-    modelo = RandomForestRegressor(
-        n_estimators=100,
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        random_state=42
-    )
-    modelo.fit(X_train_scaled, y_train)
-    
-    # Fazer predições
-    y_pred_train = modelo.predict(X_train_scaled)
-    y_pred_test = modelo.predict(X_test_scaled)
-    
-    # Calcular métricas
-    metricas = {
-        'r2_treino': r2_score(y_train, y_pred_train),
-        'r2_teste': r2_score(y_test, y_pred_test),
-        'rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
-        'mae': mean_absolute_error(y_test, y_pred_test)
+    # Calcular médias das métricas
+    metricas_medias = {
+        'r2_mean': np.mean([m['r2'] for m in todas_metricas]),
+        'rmse_mean': np.mean([m['rmse'] for m in todas_metricas]),
+        'mae_mean': np.mean([m['mae'] for m in todas_metricas])
     }
     
-    print("\nMétricas do Modelo:")
-    print(f"R² (Treino): {metricas['r2_treino']:.4f}")
-    print(f"R² (Teste): {metricas['r2_teste']:.4f}")
-    print(f"RMSE: {metricas['rmse']:.2f}")
-    print(f"MAE: {metricas['mae']:.2f}")
+    print("\nMétricas Médias Após Todas as Repetições:")
+    print(f"R² Médio: {metricas_medias['r2_mean']:.4f}")
+    print(f"RMSE Médio: {metricas_medias['rmse_mean']:.2f}")
+    print(f"MAE Médio: {metricas_medias['mae_mean']:.2f}")
     
-    # Plotar predições
-    plt.figure(figsize=(10, 6))
-    plt.scatter(y_test, y_pred_test, alpha=0.5)
-    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
-    plt.xlabel('Preço Real')
-    plt.ylabel('Preço Previsto')
-    plt.title('Preço Real vs Previsto - Random Forest')
+    # Plotar RMSE e R² ao longo das repetições
+    plt.figure(figsize=(12, 6))
+    
+    # Subplot 1: RMSE ao longo das repetições
+    plt.subplot(1, 2, 1)
+    rmse_values = [m['rmse'] for m in todas_metricas]
+    plt.plot(range(1, n_repeticoes + 1), rmse_values, 'b-', label='RMSE')
+    plt.axhline(y=metricas_medias['rmse_mean'], color='r', linestyle='--', 
+                label=f'Média: {metricas_medias["rmse_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('RMSE')
+    plt.title('RMSE ao longo das repetições')
+    plt.legend()
+    
+    # Subplot 2: R² ao longo das repetições
+    plt.subplot(1, 2, 2)
+    r2_values = [m['r2'] for m in todas_metricas]
+    plt.plot(range(1, n_repeticoes + 1), r2_values, 'g-', label='R²')
+    plt.axhline(y=metricas_medias['r2_mean'], color='r', linestyle='--', 
+                label=f'Média: {metricas_medias["r2_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('R²')
+    plt.title('R² ao longo das repetições')
+    plt.legend()
+    
     plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, 'rf_predicoes.png'))
+    plt.savefig(os.path.join(results_dir, 'rf_metricas_repeticoes.png'))
     plt.close()
     
-    # Análise de resíduos
-    analisar_residuos(y_test, y_pred_test)
-    
-    # Análise de importância das features
-    importancias = plotar_importancia_features(modelo, X)
-    print("\nTop 10 Features mais importantes:")
-    print(importancias.tail(10))
-    
-    return modelo, metricas
+    # Retornar o último modelo treinado e as métricas médias
+    return modelo, metricas_medias
 
 def main():
     print("Carregando e preparando dados...")

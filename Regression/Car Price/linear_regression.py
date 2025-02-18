@@ -132,65 +132,75 @@ def analisar_residuos(y_test, y_pred):
     print(f"Skewness: {stats.skew(residuos):.2f}")
     print(f"Kurtosis: {stats.kurtosis(residuos):.2f}")
 
-def treinar_modelo(X, y):
+def treinar_modelo(X, y, n_repeticoes=30):
     """
-    Treina e avalia o modelo de Regressão Linear
+    Treina e avalia o modelo de Regressão Linear com múltiplas repetições
     """
-    # Split dos dados
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    # Escalar features
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    # Treinar modelo
-    print("\nTreinando Regressão Linear...")
-    modelo = LinearRegression()
-    modelo.fit(X_train_scaled, y_train)
-    
-    # Fazer predições
-    y_pred_train = modelo.predict(X_train_scaled)
-    y_pred_test = modelo.predict(X_test_scaled)
-    
-    # Calcular métricas
-    metricas = {
-        'r2_treino': r2_score(y_train, y_pred_train),
-        'r2_teste': r2_score(y_test, y_pred_test),
-        'rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
-        'mae': mean_absolute_error(y_test, y_pred_test)
+    todas_metricas = []
+
+    for i in range(n_repeticoes):
+        # Split dos dados
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=i)
+        
+        # Escalar features
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+
+        # Treinar modelo
+        modelo = LinearRegression()
+        modelo.fit(X_train_scaled, y_train)
+
+        # Fazer predições
+        y_pred_test = modelo.predict(X_test_scaled)
+
+        # Calcular métricas
+        metricas = {
+            'r2': r2_score(y_test, y_pred_test),
+            'rmse': np.sqrt(mean_squared_error(y_test, y_pred_test))
+        }
+        
+        todas_metricas.append(metricas)
+
+    # Cálculo das métricas médias
+    metricas_medias = {
+        'rmse_mean': np.mean([m['rmse'] for m in todas_metricas]),
+        'r2_mean': np.mean([m['r2'] for m in todas_metricas])
     }
-    
-    print("\nMétricas do Modelo:")
-    print(f"R² (Treino): {metricas['r2_treino']:.4f}")
-    print(f"R² (Teste): {metricas['r2_teste']:.4f}")
-    print(f"RMSE: {metricas['rmse']:.2f}")
-    print(f"MAE: {metricas['mae']:.2f}")
-    
-    # Plotar predições
-    plt.figure(figsize=(10, 6))
-    plt.scatter(y_test, y_pred_test, alpha=0.5)
-    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
-    plt.xlabel('Preço Real')
-    plt.ylabel('Preço Previsto')
-    plt.title('Preço Real vs Previsto - Regressão Linear')
+
+    # Criar figura
+    plt.figure(figsize=(12, 5))
+
+    # RMSE ao longo das repetições
+    plt.subplot(1, 2, 1)
+    rmse_values = [m['rmse'] for m in todas_metricas]
+    plt.plot(range(1, n_repeticoes + 1), rmse_values, 'b-', label='RMSE')
+    plt.axhline(y=metricas_medias['rmse_mean'], color='r', linestyle='--', label=f'Média: {metricas_medias["rmse_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('RMSE')
+    plt.title('RMSE ao longo das repetições')
+    plt.legend()
+
+    # R² ao longo das repetições
+    plt.subplot(1, 2, 2)
+    r2_values = [m['r2'] for m in todas_metricas]
+    plt.plot(range(1, n_repeticoes + 1), r2_values, 'g-', label='R²')
+    plt.axhline(y=metricas_medias['r2_mean'], color='r', linestyle='--', label=f'Média: {metricas_medias["r2_mean"]:.2f}')
+    plt.xlabel('Repetição')
+    plt.ylabel('R²')
+    plt.title('R² ao longo das repetições')
+    plt.legend()
+
     plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, 'lr_predicoes.png'))
+    plt.savefig(os.path.join(results_dir, 'metricas_repeticoes.png'))
     plt.close()
-    
-    # Análise de resíduos
-    analisar_residuos(y_test, y_pred_test)
-    
-    # Análise dos coeficientes
-    coef_df = pd.DataFrame({
-        'Feature': X.columns,
-        'Coeficiente': modelo.coef_
-    }).sort_values('Coeficiente', ascending=False)
-    
-    print("\nTop 10 Features mais importantes:")
-    print(coef_df.head(10))
-    
-    return modelo, metricas
+
+    print("\nMédias das métricas ao longo das repetições:")
+    print(f"RMSE Médio: {metricas_medias['rmse_mean']:.2f}")
+    print(f"R² Médio: {metricas_medias['r2_mean']:.4f}")
+
+    return modelo, metricas_medias
+
 
 def main():
     print("Carregando e preparando dados...")
