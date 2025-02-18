@@ -81,6 +81,20 @@ def plot_feature_importance(model, feature_names):
     plt.savefig(os.path.join(results_dir, 'feature_importance.png'))
     plt.close()
 
+def plot_predictions(y_test, y_pred):
+    """
+    Plota gráficos de predição
+    """
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_test, y_pred, alpha=0.5)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+    plt.xlabel('Valores Reais')
+    plt.ylabel('Valores Preditos')
+    plt.title('Valores Reais vs Preditos')
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, 'predictions.png'))
+    plt.close()
+
 def train_model(X, y, n_repetitions=30):
     """
     Treina o Random Forest n_repetitions vezes e retorna as métricas
@@ -126,6 +140,8 @@ def train_model(X, y, n_repetitions=30):
         if i == n_repetitions - 1:
             final_predictions = (y_test, y_pred)
             plot_feature_importance(model, feature_names)
+            # Adicionar a plotagem das predições
+            plot_predictions(y_test, y_pred)
 
     # Calcular médias e desvios das métricas
     avg_metrics = {
